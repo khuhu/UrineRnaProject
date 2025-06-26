@@ -1,13 +1,9 @@
----
-title: "R-based classification model building for urine RNA data"
-output:
-  html_document: default
-  html_notebook: default
-  pdf_document: default
----
-#####Path to actual code is /mnt/DATA4/kevhu/scripts/20180715randoForest.R, /home/kevhu/scripts/20180808urineClassifierCleaner.R & /home/kevhu/scripts/20180808urineClassifierGaneshGG2.R . However this is a lot cleaner to look at and better organized
+Urine expression data classifier
+============================
 
-#####Setup steps and packages needed for the analysis. Expression data is divided by KLK3 * 100,000 for normalization. Similar normalization is done in the original Mips paper. Table a is from Andi and b is from Scott. Same information, but Scott's annotations for cancer non-cancer vs what I'm using which is division by grade groups. I also use Scott's data because he updated it with serum PSA measurements
+Path to actual code is /mnt/DATA4/kevhu/scripts/20180715randoForest.R, /home/kevhu/scripts/20180808urineClassifierCleaner.R & /home/kevhu/scripts/20180808urineClassifierGaneshGG2.R . However this is a lot cleaner to look at and better organized
+
+Setup steps and packages needed for the analysis. Expression data is divided by KLK3 * 100,000 for normalization. Similar normalization is done in the original Mips paper. Table a is from Andi and b is from Scott. Same information, but Scott's annotations for cancer non-cancer vs what I'm using which is division by grade groups. I also use Scott's data because he updated it with serum PSA measurements
 ```{r, echo=TRUE}
 .libPaths(c("/home/kevhu/R/x86_64-pc-linux-gnu-library/3.2",.libPaths()))
 library(VSURF)
@@ -26,7 +22,8 @@ a <- read_xlsx("/mnt/DATA4/kevhu/urineRNA/AC17.2ExtDes2_mastermatrix_allsamples_
 b <- read_xlsx("/mnt/DATA4/kevhu/urineRNA/20189_07_26_AC17.2ExtDes2_mastermatrix.xlsx")
 ```
 
-#####Steps to first remove grade group 2 samples, afterwards I will set aside a set of samples for cross-validation later. Plus some steps to setup the work the VSURF format which is a list of two things: (1) data frame with samples and variables as rows and columns respsectively (2) vector of classes as factors. 
+Steps to first remove grade group 2 samples, afterwards I will set aside a set of samples for cross-validation later. Plus some steps to setup the work the VSURF format which is a list of two things: (1) data frame with samples and variables as rows and columns respsectively (2) vector of classes as factors. 
+
 ```{r}
 a <- a[-which(a$`Grade group` == 2),]
 a.1 <- a[1:109,3:86]
@@ -52,7 +49,7 @@ ids.3 <- str_replace_all(ids.2, "GG2-5", "Cancer")
 ids.3 <- str_replace_all(ids.3, "Benign/GG1", "NoCancer")
 ```
 
-#### Running the random forest model and evaluating the results. I only use variables from thresholding step, because the next two steps are recurvsive feature elimination (RFE) .. which I'm not a fan of, and fitting to a random forest. Diaz-Urute 2011(?) popularized random forests into RFE in their microarray paper. I think using random forest to calculate VI from MSE decrease followed by CART on the standard deviations is enough - CART on standard deviation of VI is not common. There aren't too many ways of selecting from the ranked list of VIs though, so this a more objective way of choosing variables. Again, the purpose of the random forest was just to reduce correlated feutures i.e genes because correlated features cause models to overfit. Note a specific type of seed for the parallel processing prior to random forest will make the steps reprodicble - need to reset seed after every run for it to work as intended. Also the VSURF function leverages the parallel package and the parallel=TRUE runs on our server for parallel processing
+Running the random forest model and evaluating the results. I only use variables from thresholding step, because the next two steps are recurvsive feature elimination (RFE) .. which I'm not a fan of, and fitting to a random forest. Diaz-Urute 2011(?) popularized random forests into RFE in their microarray paper. I think using random forest to calculate VI from MSE decrease followed by CART on the standard deviations is enough - CART on standard deviation of VI is not common. There aren't too many ways of selecting from the ranked list of VIs though, so this a more objective way of choosing variables. Again, the purpose of the random forest was just to reduce correlated feutures i.e genes because correlated features cause models to overfit. Note a specific type of seed for the parallel processing prior to random forest will make the steps reprodicble - need to reset seed after every run for it to work as intended. Also the VSURF function leverages the parallel package and the parallel=TRUE runs on our server for parallel processing
 
 ```{r,  fig.keep= "all"}
 testRandom <- list(a.2, ids.2)
@@ -65,7 +62,7 @@ plot(vsurf.parallel)
 
 ```
 
-#### Below I load the genes found to be informative in the random forest and subset them. One can explore the nature of these genes by using caret's (Max Kuhn) featurePlot. Note, featurePlot is lattice (package) based, so graphical parameters paased need to be lattice ones. I am not too familiar with lattice graphical parameters, so I also include ggplot code for boxplots
+Below I load the genes found to be informative in the random forest and subset them. One can explore the nature of these genes by using caret's (Max Kuhn) featurePlot. Note, featurePlot is lattice (package) based, so graphical parameters paased need to be lattice ones. I am not too familiar with lattice graphical parameters, so I also include ggplot code for boxplots
 
 ```{r, fig.keep= "all"}
 
@@ -103,7 +100,7 @@ ggplot(data = a.2.log.30.melt, aes(x = variable, y = value, colour = Classes)) +
 ```
 
 
-#### Example of regularized regression which is does MLE-based penalty. Done using the glmnet package which is elastic net. Elastic net allows for penalty that is note purely either Lasso or ridge. Note x has to be just a matrix of predictors, whereas y is the response in the form of factors. I also think you can only tune it to maximize AUC with two class classification ... multi-class is not supported, becuase I guess since there is n (# of classes) choose 2 AUC curves needed to tune and it gets complex .... The estimated parameters of alpha and lambda should be almost converge
+Example of regularized regression which is does MLE-based penalty. Done using the glmnet package which is elastic net. Elastic net allows for penalty that is note purely either Lasso or ridge. Note x has to be just a matrix of predictors, whereas y is the response in the form of factors. I also think you can only tune it to maximize AUC with two class classification ... multi-class is not supported, becuase I guess since there is n (# of classes) choose 2 AUC curves needed to tune and it gets complex .... The estimated parameters of alpha and lambda should be almost converge
 
 ```{r}
 a.3 <- cbind(ids.3,a.2.genes30)
@@ -112,7 +109,8 @@ test.cv <- cv.glmnet(x = matrix(unlist(a.3[,2:ncol(a.3)]), ncol = ncol(a.3)-1), 
                      type.measure = "auc", maxit=1000000, alpha = 1)
 ```
 
-#### Using caret for five-fold cross validation. Afterwards, I can use the held out set to do additional cross-validation. Note held out set was not used for random forest variable selection. Data was split 2/3 training and 1/3 testing. Caret does the auto conversion needed for one's response and predictors needed when it passes through to glmnet. Glmnet standardizes the predictor variables, not reponse variables, as a default setting so no preprocessing needs to be done. Standardizing data such that your predictors have mean=0 and var=1 is pretty standard as it rids the intercept or zeroes it for regularized regression. If not, your scales may be off and the shrinking of variables can be skewed. Reference Tibshirani 2002 for original Lasso and Ridge paper. Also I use log2 normalized data as it seems more stable. Weights are also needed since the data set i.e Cancer vs non-cancer is unbalanced. Typically 3 ways to deal with this: upsample to majority class, downsample to minority class, or provide class weights. All three methods should typically yield similar results .... according to Marlena haha ...
+Using caret for five-fold cross validation. Afterwards, I can use the held out set to do additional cross-validation. Note held out set was not used for random forest variable selection. Data was split 2/3 training and 1/3 testing. Caret does the auto conversion needed for one's response and predictors needed when it passes through to glmnet. Glmnet standardizes the predictor variables, not reponse variables, as a default setting so no preprocessing needs to be done. Standardizing data such that your predictors have mean=0 and var=1 is pretty standard as it rids the intercept or zeroes it for regularized regression. If not, your scales may be off and the shrinking of variables can be skewed. Reference Tibshirani 2002 for original Lasso and Ridge paper. Also I use log2 normalized data as it seems more stable. Weights are also needed since the data set i.e Cancer vs non-cancer is unbalanced. Typically 3 ways to deal with this: upsample to majority class, downsample to minority class, or provide class weights. All three methods should typically yield similar results.
+
 
 ```{r}
 a.7 <- a.2.log.30
@@ -133,7 +131,7 @@ fiveFoldModel.log <- train(ids.3 ~., data = a.7, trControl=train_control.combine
 fiveFoldModel.log
 ```
 
-#### Below I am making ROC curves from pROC package. Done b/c caret utilizes the roc function from pROC when maximizing for AUC. Then I do validation on the testing cohort. Note the samples needed to be reordered for training b/c of the order of the weights - not needed for testing set. The levels need not be in the same order as the pROC package should detect this, shoot a warning and relevel for you
+Below I am making ROC curves from pROC package. Done b/c caret utilizes the roc function from pROC when maximizing for AUC. Then I do validation on the testing cohort. Note the samples needed to be reordered for training b/c of the order of the weights - not needed for testing set. The levels need not be in the same order as the pROC package should detect this, shoot a warning and relevel for you
 
 ```{r}
 ####alpha = 0.55 and lambda = 0.04765286.
@@ -158,7 +156,7 @@ plot.roc(rocGraph.log, main = "PSA with model ROC")
 rocGraph.log$auc
 ```
 
-#### Next just redid the same model fitting and performance tuning for PSA, 29 gene + PSA and Mips
+Next just redid the same model fitting and performance tuning for PSA, 29 gene + PSA and Mips
 
 ```{r}
 
@@ -192,9 +190,7 @@ rocGraph.psa <- roc(ids.held.out ~ probROC.psa$`Cancer`)
 plot(rocGraph.psa)
 rocGraph.psa$auc
 
-### combined
-###
-###
+Combined
 
 a.6 <- cbind(a.7[,1],PSA.training, a.7[,2:ncol(a.7)])
 colnames(a.6)[1:2] <- c("ids.3","PSA")
@@ -221,7 +217,7 @@ plot(rocGraph.combined)
 rocGraph.combined$auc
 ```
 
-#### Mips is a bit different since it was done on a different technology ... we can try and make our own using the same number of features i.e PCA3 (lncRNA), TMRPSS2:ERG, and PSA. For TMPRSS2:ERG fusions. I just used sum of all the TMPRSS2:ERG fusions as one variable. In the future I will attempt to do weighted mean by frequency.
+Mips is a bit different since it was done on a different technology ... we can try and make our own using the same number of features i.e PCA3 (lncRNA), TMRPSS2:ERG, and PSA. For TMPRSS2:ERG fusions. I just used sum of all the TMPRSS2:ERG fusions as one variable. In the future I will attempt to do weighted mean by frequency.
 
 ```{r}
 tmprss2.fusion.training <- log2(rowSums(a.2[,(which(grepl("TMPRSS2-ERG", colnames(a.2))))]) + 1)
@@ -242,7 +238,6 @@ testingPred.mips <- fiveFoldModel.mips$pred
 testingPred.mips <- testingPred.mips[which(testingPred.mips$lambda > 0.00348),]
 testingPred.mips <- testingPred.mips[which(testingPred.mips$alpha == 0.1),]
 plot.roc(pROC::roc(testingPred.mips$obs ~ testingPred.mips$Cancer))
-###
 
 
 held.out.tmrpss <- log2(rowSums(held.out[,(which(grepl("TMPRSS2-ERG", colnames(held.out))))])+1)
@@ -260,7 +255,7 @@ plot(rocGraph.mips)
 rocGraph.mips$auc
 ```
 
-#### AUC plots were made using base R ..... because pROC makes plots using base R, so it's easier to manipulate this way
+AUC plots were made using base R ..... because pROC makes plots using base R, so it's easier to manipulate this way
 
 ```{r}
 plot(rocGraph.combined, main = "ROCs: Training n=73; Testing n=36", col = alpha("green",alpha = 0.5), xlim = c(1,0), ylim = c(0,1), lty = 2, asp = FALSE)
@@ -286,7 +281,7 @@ legend("right", legend = c("29 genes - AUC:0.899 ; AUC:0.812", "PSA - AUC:0.647 
 ```
 
 
-#### Final notes, Scott's annotations performed a bit worse than the model here which was GG1/benign vs GG3-5. The model vs GG2-5 is in another script I linked and not included because it is just repeptitive. 
+Final notes, Scott's annotations performed a bit worse than the model here which was GG1/benign vs GG3-5. The model vs GG2-5 is in another script I linked and not included because it is just repeptitive. 
 
 
 
